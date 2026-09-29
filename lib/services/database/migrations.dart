@@ -8,6 +8,8 @@ class Migrations {
   static const String tableTransactions = 'transactions';
   static const String tableTasks = 'tasks';
   static const String tableChatMessages = 'chat_messages';
+  static const String tableChats = 'chats';
+  static const String tableMessages = 'messages';
   static const String tableProfile = 'user_profile';
 
   /// Called on first database creation (version 1).
@@ -70,6 +72,32 @@ class Migrations {
     );
     await db.execute(
       'CREATE INDEX idx_chat_created ON $tableChatMessages (created_at)',
+    );
+
+    // --- Chat conversations (chats + messages) -----------------------------
+    await db.execute('''
+      CREATE TABLE $tableChats (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL DEFAULT 'Новый чат',
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE $tableMessages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        chat_id INTEGER NOT NULL,
+        role TEXT NOT NULL,
+        content TEXT NOT NULL,
+        error INTEGER NOT NULL DEFAULT 0,
+        created_at INTEGER NOT NULL,
+        FOREIGN KEY(chat_id) REFERENCES $tableChats(id) ON DELETE CASCADE
+      )
+    ''');
+
+    await db.execute(
+      'CREATE INDEX idx_messages_chat ON $tableMessages (chat_id, created_at)',
     );
   }
 

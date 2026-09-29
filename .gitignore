@@ -1,4 +1,13 @@
-# Flutter/Dart build artifacts
+# Flutter/Dart Build Artifacts
 .dart_tool/
 build/
 .flutter-plugins-dependencies
+
+# Dart Dependency Lock File (Optional: usually tracked, but often ignored in large monorepos or specific setups. Keeping standard behavior: tracked by default, so NOT ignoring pubspec.lock unless specifically requested. However, .dart_tool and build are definitely generated.)
+# Note: pubspec.yaml is source config, keep it. pubspec.lock is dependency resolution, typically kept in VCS for apps, ignored for libraries. Since this looks like an app feature addition, we generally do NOT ignore pubspec.lock. But we MUST ignore the generated artifacts.
+
+# Generated files from modified list
+*.dill
+*.stamp
+kernel_blob.bin
+snapshot_blob.bin.d
