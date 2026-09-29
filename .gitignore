@@ -1,7 +1,1 @@
-# Flutter/Dart Build Artifacts
-.dart_tool/
-build/
-.flutter-plugins-dependencies
-
-# Dependencies (if any exist, though not explicitly in list, standard for Dart)
-# pubspec.lock is usually committed, so we do NOT ignore it.
+(empty)

@@ -47,27 +47,49 @@ class OpenAiCompatibleProvider implements AiProvider {
     ];
 
     final Uri uri = Uri.parse('$baseUrl/chat/completions');
+    const int maxAttempts = 3;
     late final http.Response response;
-    try {
-      response = await _client.post(
-        uri,
-        headers: <String, String>{
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $apiKey',
-        },
-        body: jsonEncode(<String, Object?>{
-          'model': modelName,
-          'messages': payload,
-          'stream': false,
-        }),
-      );
-    } on http.ClientException catch (e) {
-      throw AiProviderException('Сетевая ошибка: ${e.message}');
+    for (int attempt = 0; attempt < maxAttempts; attempt++) {
+      try {
+        response = await _client.post(
+          uri,
+          headers: <String, String>{
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $apiKey',
+          },
+          body: jsonEncode(<String, Object?>{
+            'model': modelName,
+            'messages': payload,
+            'stream': false,
+          }),
+        ).timeout(const Duration(seconds: 60));
+      } on TimeoutException {
+        throw const AiProviderException(
+          'TimeoutException: сервер не ответил за 60 секунд. '
+          'Проверьте URL и доступность сети.',
+        );
+      } on SocketException catch (e) {
+        throw AiProviderException(
+          'SocketException: ${e.osError?.message ?? e.message}. '
+          'Устройство не может подключиться к $baseUrl '
+          '(на Android localhost эмулятора недоступен — используйте 10.0.2.2).',
+        );
+      } on http.ClientException catch (e) {
+        throw AiProviderException('Сетевая ошибка (ClientException): ${e.message}');
+      }
+
+      // Retry on HTTP 503 (rate limited / temporarily unavailable): up to 3
+      // attempts with a 2 second pause between them.
+      if (response.statusCode == 503 && attempt < maxAttempts - 1) {
+        await Future<void>.delayed(const Duration(seconds: 2));
+        continue;
+      }
+      break;
     }
 
     if (response.statusCode != 200) {
       throw AiProviderException(
-        'Ошибка API (${response.statusCode}): ${response.body}',
+        'Ошибка API (${response.statusCode}): ${_truncate(response.body)}',
         statusCode: response.statusCode,
       );
     }
@@ -117,10 +139,10 @@ class OpenAiCompatibleProvider implements AiProvider {
               'stream': false,
             }),
           )
-          .timeout(const Duration(seconds: 15));
+          .timeout(const Duration(seconds: 60));
     } on TimeoutException {
       throw const AiProviderException(
-        'TimeoutException: сервер не ответил за 15 секунд. '
+        'TimeoutException: сервер не ответил за 60 секунд. '
         'Проверьте URL и доступность сети.',
       );
     } on SocketException catch (e) {

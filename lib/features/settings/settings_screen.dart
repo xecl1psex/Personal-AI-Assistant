@@ -5,6 +5,7 @@ import '../../core/theme/theme_provider.dart';
 import '../../shared/models/provider_config.dart';
 import '../../shared/widgets/accent_color_picker.dart';
 import 'settings_provider.dart';
+import 'system_prompt_provider.dart';
 import 'widgets/add_provider_dialog.dart';
 import 'widgets/provider_tile.dart';
 
@@ -29,6 +30,10 @@ class SettingsScreen extends StatelessWidget {
         children: const <Widget>[
           _SectionHeader(icon: Icons.smart_toy_outlined, title: '🤖 Модели ИИ'),
           _AiProvidersSection(),
+          Divider(height: 24),
+          _SectionHeader(
+              icon: Icons.psychology_outlined, title: '🧠 Системный промпт'),
+          _SystemPromptSection(),
           Divider(height: 24),
           _SectionHeader(icon: Icons.palette_outlined, title: '🎨 Оформление'),
           _AppearanceSection(),
@@ -314,6 +319,92 @@ class _AppearanceSection extends StatelessWidget {
           title: const Text('Тёмная тема'),
         ),
       ],
+    );
+  }
+}
+
+// -----------------------------------------------------------------------------
+// System prompt section
+// -----------------------------------------------------------------------------
+
+class _SystemPromptSection extends StatelessWidget {
+  const _SystemPromptSection();
+
+  Future<void> _showEditDialog(BuildContext context) async {
+    final SystemPromptProvider provider =
+        context.read<SystemPromptProvider>();
+    final TextEditingController controller =
+        TextEditingController(text: provider.prompt);
+
+    await showDialog<void>(
+      context: context,
+      builder: (BuildContext ctx) => AlertDialog(
+        title: const Text('Системный промпт'),
+        content: SizedBox(
+          width: 420,
+          child: TextField(
+            controller: controller,
+            maxLines: 10,
+            minLines: 5,
+            decoration: const InputDecoration(
+              hintText: 'Опиши, как ассистент должен себя вести',
+              border: OutlineInputBorder(),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              provider.reset();
+              Navigator.of(ctx).pop();
+            },
+            child: const Text('Сбросить'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () {
+              provider.setPrompt(controller.text);
+              Navigator.of(ctx).pop();
+            },
+            child: const Text('Сохранить'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    return Consumer<SystemPromptProvider>(
+      builder: (BuildContext context, SystemPromptProvider sp, _) {
+        final bool isDefault = sp.prompt == SystemPromptProvider.defaultPrompt;
+        final String subtitle = isDefault
+            ? 'По умолчанию'
+            : (sp.prompt.length <= 60
+                ? sp.prompt
+                : '${sp.prompt.substring(0, 60)}…');
+        return ListTile(
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+          leading: Icon(Icons.psychology_outlined,
+              color: theme.colorScheme.primary),
+          title: const Text('Системный промпт'),
+          subtitle: Text(
+            subtitle,
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          trailing: const Icon(Icons.edit_outlined),
+          onTap: () => _showEditDialog(context),
+        );
+      },
     );
   }
 }
