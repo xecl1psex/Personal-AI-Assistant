@@ -208,6 +208,17 @@ class DatabaseService {
     );
   }
 
+  /// Bump the chat's `updated_at` to now (used for ordering in the chats list).
+  Future<void> updateChatTimestamp(int chatId) async {
+    final Database db = await database;
+    await db.update(
+      Migrations.tableChats,
+      <String, Object?>{'updated_at': DateTime.now().millisecondsSinceEpoch},
+      where: 'id = ?',
+      whereArgs: <Object?>[chatId],
+    );
+  }
+
   /// Delete all messages of a chat (the chat itself is kept).
   Future<void> clearChat(int chatId) async {
     final Database db = await database;
