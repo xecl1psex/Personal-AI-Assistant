@@ -68,8 +68,7 @@ class SettingsProvider extends ChangeNotifier {
       _activeProviderId = prefs.getString(prefsKeyActiveProviderId);
       // Validate the stored active id still exists.
       if (_activeProviderId != null && activeProvider == null) {
-        _activeProviderId =
-            _providers.isNotEmpty ? _providers.first.id : null;
+        _activeProviderId = _providers.isNotEmpty ? _providers.first.id : null;
       }
     } catch (e, s) {
       debugPrint('SettingsProvider.load failed: $e\n$s');
@@ -100,12 +99,19 @@ class SettingsProvider extends ChangeNotifier {
 
   /// Add a new provider, store its API key securely, persist the list.
   /// The first added provider automatically becomes active.
+  ///
+  /// The API key is written to secure storage BEFORE the provider list is
+  /// persisted, and both writes are fully awaited — so a saved provider can
+  /// never exist in SharedPreferences without its key being committed.
   Future<void> addProvider(ProviderConfig config, String apiKey) async {
+    // 1. Save the key first (awaited — guarantees the write completed).
+    await _storage.saveApiKey(config.id, apiKey);
+
+    // 2. Only then update the in-memory list and persist it.
     _providers = List<ProviderConfig>.from(_providers)..add(config);
     if (_activeProviderId == null) {
       _activeProviderId = config.id;
     }
-    await _storage.saveApiKey(config.id, apiKey);
     await _saveProviders();
     notifyListeners();
   }
@@ -116,8 +122,7 @@ class SettingsProvider extends ChangeNotifier {
         .where((ProviderConfig p) => p.id != id)
         .toList(growable: false);
     if (_activeProviderId == id) {
-      _activeProviderId =
-          _providers.isNotEmpty ? _providers.first.id : null;
+      _activeProviderId = _providers.isNotEmpty ? _providers.first.id : null;
     }
     await _storage.deleteApiKey(id);
     await _saveProviders();
@@ -126,9 +131,10 @@ class SettingsProvider extends ChangeNotifier {
 
   /// Update an existing provider (matched by [ProviderConfig.id]).
   ///
-  /// Replaces the stored config fields and persists the list. If
-  /// [newApiKey] is non-null it is also saved to secure storage
-  /// (pass an empty string to intentionally clear the key).
+  /// Replaces the stored config fields and persists the list. The API key is
+  /// only touched when [newApiKey] is non-null AND non-empty; passing null or
+  /// an empty string preserves the currently stored key (it is never
+  /// accidentally wiped by an edit that didn't change it).
   Future<void> updateProvider(
     ProviderConfig config, {
     String? newApiKey,
@@ -137,11 +143,12 @@ class SettingsProvider extends ChangeNotifier {
         _providers.indexWhere((ProviderConfig p) => p.id == config.id);
     if (index == -1) return; // unknown id — ignore
 
-    _providers = List<ProviderConfig>.from(_providers)..[index] = config;
-
-    if (newApiKey != null) {
+    // Save the new key BEFORE persisting the list (fully awaited).
+    if (newApiKey != null && newApiKey.isNotEmpty) {
       await _storage.saveApiKey(config.id, newApiKey);
     }
+
+    _providers = List<ProviderConfig>.from(_providers)..[index] = config;
     await _saveProviders();
     notifyListeners();
   }
@@ -164,6 +171,14 @@ class SettingsProvider extends ChangeNotifier {
   /// Read the API key of a provider (null if not configured).
   Future<String?> getApiKey(String providerId) async {
     return _storage.getApiKey(providerId);
+  }
+
+  /// True when the provider with [providerId] has a non-empty API key
+  /// stored in secure storage. Local providers (e.g. Ollama) may legally
+  /// have no key — treat that via [ModelPreset.isLocal] on the UI side.
+  Future<bool> hasApiKey(String providerId) async {
+    final String? key = await _storage.getApiKey(providerId);
+    return key != null && key.isNotEmpty;
   }
 
   /// Run a connectivity test against the provider with [providerId].

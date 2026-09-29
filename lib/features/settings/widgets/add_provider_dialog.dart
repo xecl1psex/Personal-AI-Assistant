@@ -14,9 +14,10 @@ import '../settings_provider.dart';
 /// connectivity test via [AiService.testConnection], then add the provider
 /// through [SettingsProvider.addProvider].
 ///
-/// Edit mode — pass [existing] to pre-fill all fields (baseUrl is editable,
-/// the API key field starts empty; a non-empty value replaces the stored key
-/// via [SettingsProvider.updateProvider]).
+/// Edit mode — pass [existing] to pre-fill all fields (baseUrl is editable).
+/// The stored API key is loaded from secure storage and pre-filled in the
+/// (obscured) key field; on save, the key is only sent to
+/// [SettingsProvider.updateProvider] when the user actually changed it.
 class AddProviderDialog extends StatefulWidget {
   const AddProviderDialog({super.key, this.existing});
 
@@ -66,6 +67,11 @@ class _AddProviderDialogState extends State<AddProviderDialog> {
   String? _testError;
   bool _saving = false;
 
+  /// The API key as loaded from secure storage when editing an existing
+  /// provider. Used to detect whether the user actually modified the field:
+  /// if the current text equals this value, no new key is written on save.
+  String _originalKey = '';
+
   @override
   void initState() {
     super.initState();
@@ -83,8 +89,26 @@ class _AddProviderDialogState extends State<AddProviderDialog> {
       _baseUrlController.text = existing.baseUrl;
       _nameController.text = existing.displayName;
       _modelController.text = existing.modelName;
+      _loadExistingApiKey(existing.id);
     } else {
       _step = _DialogStep.pickPreset;
+    }
+  }
+
+  /// Load the currently stored API key for [providerId] and pre-fill the
+  /// obscured key field so the user can see (and edit) the existing value.
+  Future<void> _loadExistingApiKey(String providerId) async {
+    try {
+      final SettingsProvider settings = context.read<SettingsProvider>();
+      final String? key = await settings.getApiKey(providerId);
+      if (!mounted) return;
+      setState(() {
+        _originalKey = key ?? '';
+        _keyController.text = _originalKey;
+      });
+    } catch (_) {
+      // Storage failure — leave the field empty; saving with an unchanged
+      // (empty) field will not overwrite the stored key anyway.
     }
   }
 
@@ -142,7 +166,9 @@ class _AddProviderDialogState extends State<AddProviderDialog> {
         displayName: _nameController.text.trim().isEmpty
             ? widget.existing!.displayName
             : _nameController.text.trim(),
-        baseUrl: _trimmedBaseUrl.isEmpty ? widget.existing!.baseUrl : _trimmedBaseUrl,
+        baseUrl: _trimmedBaseUrl.isEmpty
+            ? widget.existing!.baseUrl
+            : _trimmedBaseUrl,
         modelName: _modelController.text.trim().isEmpty
             ? widget.existing!.modelName
             : _modelController.text.trim(),
@@ -166,12 +192,17 @@ class _AddProviderDialogState extends State<AddProviderDialog> {
 
   String get _apiKey => _keyController.text.trim();
 
+  /// In edit mode: true when the user actually changed the pre-filled key.
+  /// When false, [SettingsProvider.updateProvider] is called with
+  /// `newApiKey: null` so the stored key is never rewritten/overwritten.
+  bool get _keyChanged => _apiKey.isNotEmpty && _apiKey != _originalKey;
+
   bool get _canSubmit {
     if (_saving) return false;
     if (_modelController.text.trim().isEmpty) return false;
     if (_trimmedBaseUrl.isEmpty) return false;
-    // Add mode: remote providers require a key. Edit mode: an empty key
-    // field means "keep the existing stored key".
+    // Add mode: remote providers require a key. Edit mode: the key field is
+    // pre-filled from storage, and leaving it unchanged keeps the old key.
     if (!_isEdit && !_isLocal && _apiKey.isEmpty) return false;
     return true;
   }
@@ -224,14 +255,16 @@ class _AddProviderDialogState extends State<AddProviderDialog> {
     final ProviderConfig config = _buildConfig();
 
     if (_isEdit) {
-      // Only overwrite the stored key when the user actually typed one.
+      // Only send a new key when the user actually changed it compared to
+      // the value loaded from secure storage — otherwise pass null so the
+      // stored key is preserved untouched.
       await settings.updateProvider(
         config,
-        newApiKey: _apiKey.isEmpty ? null : _apiKey,
+        newApiKey: _keyChanged ? _apiKey : null,
       );
     } else {
-      // For local presets (Ollama) the key may be empty — it is still stored
-      // so that getApiKey() returns a consistent value.
+      // For local presets (Ollama) the key may be empty — addProvider still
+      // awaits the secure-storage write before persisting the list.
       await settings.addProvider(config, _apiKey);
     }
 
@@ -401,10 +434,13 @@ class _AddProviderDialogState extends State<AddProviderDialog> {
           autocorrect: false,
           enableSuggestions: false,
           decoration: InputDecoration(
-            labelText: _isLocal
-                ? 'API-ключ (не обязателен)'
-                : (_isEdit ? 'Новый API-ключ' : 'API-ключ'),
-            hintText: _isEdit ? 'Оставьте пустым, чтобы не менять' : null,
+            labelText: _isLocal ? 'API-ключ (не обязателен)' : 'API-ключ',
+            hintText: _isEdit ? 'Не меняйте, если ключ тот же' : null,
+            helperText: _isEdit
+                ? 'Ключ загружен из защищённого хранилища. '
+                    'Измените только при необходимости — '
+                    'без изменений старый ключ сохранится.'
+                : null,
             border: const OutlineInputBorder(),
             isDense: true,
             suffixIcon: IconButton(
@@ -490,8 +526,7 @@ class _AddProviderDialogState extends State<AddProviderDialog> {
         return Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Icon(Icons.error_outline,
-                size: 16, color: theme.colorScheme.error),
+            Icon(Icons.error_outline, size: 16, color: theme.colorScheme.error),
             const SizedBox(width: 4),
             Expanded(
               child: Text(
