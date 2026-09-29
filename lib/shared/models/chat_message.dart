@@ -2,6 +2,7 @@
 class ChatMessage {
   const ChatMessage({
     this.id,
+    this.chatId,
     required this.role,
     required this.content,
     this.createdAt,
@@ -10,6 +11,9 @@ class ChatMessage {
 
   /// Database row id (null for unsaved items).
   final int? id;
+
+  /// Id of the parent chat conversation (null for unsaved items).
+  final int? chatId;
 
   /// Message author role: 'user', 'assistant' or 'system'.
   final String role;
@@ -33,6 +37,7 @@ class ChatMessage {
 
   ChatMessage copyWith({
     int? id,
+    int? chatId,
     String? role,
     String? content,
     DateTime? createdAt,
@@ -40,6 +45,7 @@ class ChatMessage {
   }) {
     return ChatMessage(
       id: id ?? this.id,
+      chatId: chatId ?? this.chatId,
       role: role ?? this.role,
       content: content ?? this.content,
       createdAt: createdAt ?? this.createdAt,
@@ -50,41 +56,57 @@ class ChatMessage {
   Map<String, Object?> toMap() {
     return <String, Object?>{
       'id': id,
+      'chat_id': chatId,
       'role': role,
       'content': content,
-      'created_at': createdAt?.toIso8601String(),
       'error': error ? 1 : 0,
+      // SQLite stores timestamps as INTEGER (milliseconds since epoch).
+      'created_at': createdAt?.millisecondsSinceEpoch,
     };
   }
 
   factory ChatMessage.fromMap(Map<String, Object?> map) {
     return ChatMessage(
       id: map['id'] as int?,
+      chatId: map['chat_id'] as int?,
       role: (map['role'] as String?) ?? roleUser,
       content: (map['content'] as String?) ?? '',
-      createdAt: map['created_at'] is String
-          ? DateTime.tryParse(map['created_at'] as String)
-          : null,
+      createdAt: _parseCreatedAt(map['created_at']),
       error: (map['error'] as int?) == 1,
     );
   }
 
+  static DateTime? _parseCreatedAt(Object? raw) {
+    if (raw is int) {
+      return DateTime.fromMillisecondsSinceEpoch(raw);
+    }
+    if (raw is String) {
+      // Backwards compatibility with the old ISO-8601 format.
+      final int? millis = int.tryParse(raw);
+      if (millis != null) {
+        return DateTime.fromMillisecondsSinceEpoch(millis);
+      }
+      return DateTime.tryParse(raw);
+    }
+    return null;
+  }
+
   Map<String, Object?> toJson() => <String, Object?>{
         'id': id,
+        'chat_id': chatId,
         'role': role,
         'content': content,
-        'created_at': createdAt?.toIso8601String(),
+        'created_at': createdAt?.millisecondsSinceEpoch,
         'error': error,
       };
 
   factory ChatMessage.fromJson(Map<String, Object?> json) {
     return ChatMessage(
       id: json['id'] as int?,
+      chatId: json['chat_id'] as int?,
       role: (json['role'] as String?) ?? roleUser,
       content: (json['content'] as String?) ?? '',
-      createdAt: json['created_at'] is String
-          ? DateTime.tryParse(json['created_at'] as String)
-          : null,
+      createdAt: _parseCreatedAt(json['created_at']),
       error: (json['error'] as bool?) ?? false,
     );
   }

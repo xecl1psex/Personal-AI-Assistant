@@ -2,6 +2,7 @@ import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
 
 import '../../core/constants.dart';
+import '../../shared/models/chat_message.dart';
 import 'migrations.dart';
 
 /// Singleton wrapper around the local sqflite database.
@@ -22,6 +23,10 @@ class DatabaseService {
     _db = await openDatabase(
       p.join(dir, AppConstants.databaseName),
       version: AppConstants.databaseVersion,
+      onConfigure: (Database db) async {
+        // Required for ON DELETE CASCADE on the messages table.
+        await db.execute('PRAGMA foreign_keys = ON');
+      },
       onCreate: Migrations.onCreate,
       onUpgrade: Migrations.onUpgrade,
     );
@@ -97,7 +102,7 @@ class DatabaseService {
   }
 
   // ---------------------------------------------------------------------------
-  // Chat history
+  // Chat history (legacy single-table API — kept for compatibility)
   // ---------------------------------------------------------------------------
 
   // TODO: реализация.
@@ -113,6 +118,110 @@ class DatabaseService {
   // TODO: реализация.
   Future<int> clearChatHistory() async {
     return 0;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Conversations: chats + messages
+  // ---------------------------------------------------------------------------
+
+  /// Create a new conversation and return its row id.
+  Future<int> createChat({String title = 'Новый чат'}) async {
+    final Database db = await database;
+    final int now = DateTime.now().millisecondsSinceEpoch;
+    return db.insert(Migrations.tableChats, <String, Object?>{
+      'title': title,
+      'created_at': now,
+      'updated_at': now,
+    });
+  }
+
+  /// All conversations, most recently updated first.
+  Future<List<Map<String, dynamic>>> getAllChats() async {
+    final Database db = await database;
+    return db.query(
+      Migrations.tableChats,
+      orderBy: 'updated_at DESC',
+    );
+  }
+
+  /// Delete a conversation and (via FK cascade) all of its messages.
+  Future<void> deleteChat(int chatId) async {
+    final Database db = await database;
+    await db.delete(
+      Migrations.tableMessages,
+      where: 'chat_id = ?',
+      whereArgs: <Object?>[chatId],
+    );
+    await db.delete(
+      Migrations.tableChats,
+      where: 'id = ?',
+      whereArgs: <Object?>[chatId],
+    );
+  }
+
+  /// Insert a message into its chat and bump the chat's `updated_at`.
+  /// Returns the new message row id.
+  Future<int> insertMessage(ChatMessage msg) async {
+    final Database db = await database;
+    final int now = DateTime.now().millisecondsSinceEpoch;
+    final ChatMessage toSave = msg.copyWith(createdAt: msg.createdAt ?? DateTime.now());
+
+    final int messageId =
+        await db.insert(Migrations.tableMessages, toSave.toMap());
+
+    if (toSave.chatId != null) {
+      await db.update(
+        Migrations.tableChats,
+        <String, Object?>{'updated_at': now},
+        where: 'id = ?',
+        whereArgs: <Object?>[toSave.chatId],
+      );
+    }
+    return messageId;
+  }
+
+  /// Messages of a chat in chronological order.
+  Future<List<ChatMessage>> getMessages(int chatId) async {
+    final Database db = await database;
+    final List<Map<String, Object?>> rows = await db.query(
+      Migrations.tableMessages,
+      where: 'chat_id = ?',
+      whereArgs: <Object?>[chatId],
+      orderBy: 'created_at ASC, id ASC',
+    );
+    return rows
+        .map((Map<String, Object?> row) => ChatMessage.fromMap(row))
+        .toList(growable: false);
+  }
+
+  /// Rename a conversation.
+  Future<void> updateChatTitle(int chatId, String title) async {
+    final Database db = await database;
+    await db.update(
+      Migrations.tableChats,
+      <String, Object?>{
+        'title': title,
+        'updated_at': DateTime.now().millisecondsSinceEpoch,
+      },
+      where: 'id = ?',
+      whereArgs: <Object?>[chatId],
+    );
+  }
+
+  /// Delete all messages of a chat (the chat itself is kept).
+  Future<void> clearChat(int chatId) async {
+    final Database db = await database;
+    await db.delete(
+      Migrations.tableMessages,
+      where: 'chat_id = ?',
+      whereArgs: <Object?>[chatId],
+    );
+    await db.update(
+      Migrations.tableChats,
+      <String, Object?>{'updated_at': DateTime.now().millisecondsSinceEpoch},
+      where: 'id = ?',
+      whereArgs: <Object?>[chatId],
+    );
   }
 
   // ---------------------------------------------------------------------------
