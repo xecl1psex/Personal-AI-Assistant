@@ -38,7 +38,7 @@ class AppTheme {
   static ThemeData _base(ColorScheme scheme) {
     final bool isDark = scheme.brightness == Brightness.dark;
     final Color background =
-        isDark ? const Color(AppConstants.baseBackground) : scheme.background;
+        isDark ? const Color(AppConstants.baseBackground) : scheme.surface;
 
     return ThemeData(
       useMaterial3: true,
