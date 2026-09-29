@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 
-import '../dashboard/dashboard_screen.dart';
-import '../chat/chat_screen.dart';
-import '../finance/finance_screen.dart';
-import '../tasks/tasks_screen.dart';
-import '../profile/profile_screen.dart';
+import '../../features/dashboard/dashboard_screen.dart';
+import '../../features/chat/chat_screen.dart';
+import '../../features/finance/finance_screen.dart';
+import '../../features/tasks/tasks_screen.dart';
+import '../../features/profile/profile_screen.dart';
 
 /// Root navigation: Material 3 [NavigationBar] with 5 tabs.
 class MainNavigation extends StatefulWidget {
@@ -39,7 +39,6 @@ class _MainNavigationState extends State<MainNavigation> {
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
-        showUnselectedLabels: true,
         destinations: const <NavigationDestination>[
           NavigationDestination(
             icon: Icon(Icons.space_dashboard_outlined),
