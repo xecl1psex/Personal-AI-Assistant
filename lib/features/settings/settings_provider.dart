@@ -124,6 +124,28 @@ class SettingsProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Update an existing provider (matched by [ProviderConfig.id]).
+  ///
+  /// Replaces the stored config fields and persists the list. If
+  /// [newApiKey] is non-null it is also saved to secure storage
+  /// (pass an empty string to intentionally clear the key).
+  Future<void> updateProvider(
+    ProviderConfig config, {
+    String? newApiKey,
+  }) async {
+    final int index =
+        _providers.indexWhere((ProviderConfig p) => p.id == config.id);
+    if (index == -1) return; // unknown id — ignore
+
+    _providers = List<ProviderConfig>.from(_providers)..[index] = config;
+
+    if (newApiKey != null) {
+      await _storage.saveApiKey(config.id, newApiKey);
+    }
+    await _saveProviders();
+    notifyListeners();
+  }
+
   /// Mark [id] as the active provider (null clears selection).
   Future<void> setActiveProvider(String? id) async {
     if (id != null && !_providers.any((ProviderConfig p) => p.id == id)) {

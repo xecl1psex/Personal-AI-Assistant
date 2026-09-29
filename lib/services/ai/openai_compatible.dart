@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:http/http.dart' as http;
 
@@ -84,11 +86,19 @@ class OpenAiCompatibleProvider implements AiProvider {
     return (message['content'] as String?) ?? '';
   }
 
+  /// Lightweight connectivity check: sends a single 'ping' message with
+  /// max_tokens = 5.
+  ///
+  /// Returns true on HTTP 200. On any failure throws [AiProviderException]
+  /// containing the full diagnostic text: HTTP status code + server response
+  /// body, or the underlying network error (SocketException, TimeoutException,
+  /// ClientException, ...).
   @override
   Future<bool> testConnection() async {
     final Uri uri = Uri.parse('$baseUrl/chat/completions');
+    late final http.Response response;
     try {
-      final http.Response response = await _client
+      response = await _client
           .post(
             uri,
             headers: <String, String>{
@@ -108,10 +118,34 @@ class OpenAiCompatibleProvider implements AiProvider {
             }),
           )
           .timeout(const Duration(seconds: 15));
-      return response.statusCode == 200;
-    } catch (_) {
-      return false;
+    } on TimeoutException {
+      throw const AiProviderException(
+        'TimeoutException: сервер не ответил за 15 секунд. '
+        'Проверьте URL и доступность сети.',
+      );
+    } on SocketException catch (e) {
+      throw AiProviderException(
+        'SocketException: ${e.osError?.message ?? e.message}. '
+        'Устройство не может подключиться к $baseUrl '
+        '(на Android localhost эмулятора недоступен — используйте 10.0.2.2).',
+      );
+    } on http.ClientException catch (e) {
+      throw AiProviderException('Сетевая ошибка (ClientException): ${e.message}');
     }
+
+    if (response.statusCode != 200) {
+      throw AiProviderException(
+        'HTTP ${response.statusCode}: ${_truncate(response.body)}',
+        statusCode: response.statusCode,
+      );
+    }
+    return true;
+  }
+
+  static String _truncate(String text, {int maxLength = 500}) {
+    final String trimmed = text.trim();
+    if (trimmed.length <= maxLength) return trimmed;
+    return '${trimmed.substring(0, maxLength)}…';
   }
 
   /// Releases the underlying HTTP client.

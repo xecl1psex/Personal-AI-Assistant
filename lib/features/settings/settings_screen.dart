@@ -128,6 +128,71 @@ class _AiProvidersSection extends StatelessWidget {
     await AddProviderDialog.show(context);
   }
 
+  /// Bottom sheet with actions for one provider: activate / edit / delete.
+  void _showProviderActions(
+    BuildContext context,
+    SettingsProvider settings,
+    ProviderConfig config,
+  ) {
+    final bool isActive = config.id == settings.activeProviderId;
+    final ThemeData theme = Theme.of(context);
+
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (BuildContext sheetContext) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: Text(
+                  '${config.displayName} · ${config.modelName}',
+                  style: theme.textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.bold),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+              ListTile(
+                leading: Icon(
+                  isActive ? Icons.check_circle : Icons.play_circle_outline,
+                  color: theme.colorScheme.primary,
+                ),
+                title: const Text('Сделать активным'),
+                enabled: !isActive,
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  settings.setActiveProvider(config.id);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.edit_outlined),
+                title: const Text('Редактировать'),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  AddProviderDialog.edit(context, config);
+                },
+              ),
+              ListTile(
+                leading: Icon(Icons.delete_outline, color: theme.colorScheme.error),
+                title: Text(
+                  'Удалить',
+                  style: theme.textTheme.bodyLarge
+                      ?.copyWith(color: theme.colorScheme.error),
+                ),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  _confirmDelete(context, config);
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     // Rebuilds automatically whenever providers / active id change.
@@ -193,7 +258,7 @@ class _AiProvidersSection extends StatelessWidget {
             child: ProviderTile(
               config: config,
               isActive: config.id == settings.activeProviderId,
-              onTap: () => settings.setActiveProvider(config.id),
+              onTap: () => _showProviderActions(context, settings, config),
               onLongPress: () => _confirmDelete(context, config),
             ),
           ),
