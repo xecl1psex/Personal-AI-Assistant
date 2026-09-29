@@ -30,10 +30,15 @@ jobs:
       - name: Patch Kotlin version to 1.9.24
         run: |
           sed -i 's|id "org.jetbrains.kotlin.android" version "[^"]*"|id "org.jetbrains.kotlin.android" version "1.9.24"|' android/settings.gradle
-          echo "=== settings.gradle ==="
-          cat android/settings.gradle
-          echo "=== build.gradle ==="
-          cat android/build.gradle
+
+      - name: Add INTERNET permission to AndroidManifest
+        run: |
+          MANIFEST=android/app/src/main/AndroidManifest.xml
+          if ! grep -q 'android.permission.INTERNET' "$MANIFEST"; then
+            sed -i 's|<manifest xmlns:android="http://schemas.android.com/apk/res/android">|<manifest xmlns:android="http://schemas.android.com/apk/res/android">\n    <uses-permission android:name="android.permission.INTERNET"/>|' "$MANIFEST"
+          fi
+          echo "=== AndroidManifest.xml ==="
+          cat "$MANIFEST"
 
       - name: Install dependencies
         run: flutter pub get
