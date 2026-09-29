@@ -5,6 +5,7 @@ import 'app.dart';
 import 'core/theme/theme_provider.dart';
 import 'features/chat/chat_provider.dart';
 import 'features/settings/settings_provider.dart';
+import 'features/settings/system_prompt_provider.dart';
 
 /// Entry point of the Personal AI app.
 ///
@@ -22,6 +23,9 @@ void main() {
         ),
         ChangeNotifierProvider<SettingsProvider>(
           create: (_) => SettingsProvider()..load(),
+        ),
+        ChangeNotifierProvider<SystemPromptProvider>(
+          create: (_) => SystemPromptProvider()..load(),
         ),
         ChangeNotifierProvider<ChatProvider>(
           create: (_) => ChatProvider(),
