@@ -3,23 +3,25 @@ import 'package:provider/provider.dart';
 
 import 'app.dart';
 import 'core/theme/theme_provider.dart';
+import 'features/settings/settings_provider.dart';
 
 /// Entry point of the Personal AI app.
 ///
-/// Initializes Flutter bindings, loads persisted theme preferences
-/// (accent color + dark mode) *before* the first frame, then runs
-/// [PersonalAiApp] wrapped in a [ChangeNotifierProvider] for [ThemeProvider].
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-
-  final ThemeProvider themeProvider = ThemeProvider();
-  // Restore saved theme so the very first frame already uses the right
-  // accent color / brightness (no flash of default theme).
-  await themeProvider.loadFromPrefs();
-
+/// Initializes Flutter bindings, then runs [PersonalAiApp] wrapped in a
+/// [MultiProvider] with:
+///  * [ThemeProvider] — dark theme + accent color (loaded from prefs).
+///  * [SettingsProvider] — AI providers list, active provider, API keys.
+void main() {
   runApp(
-    ChangeNotifierProvider<ThemeProvider>.value(
-      value: themeProvider,
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider<ThemeProvider>(
+          create: (_) => ThemeProvider()..loadFromPrefs(),
+        ),
+        ChangeNotifierProvider<SettingsProvider>(
+          create: (_) => SettingsProvider()..load(),
+        ),
+      ],
       child: const PersonalAiApp(),
     ),
   );
