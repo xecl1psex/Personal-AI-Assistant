@@ -18,12 +18,14 @@ class AiService {
   }
 
   /// Create a provider and run its lightweight connectivity check.
+  ///
+  /// Returns true on success. On failure rethrows [AiProviderException] with
+  /// the full diagnostic text (HTTP code + server response body, or network
+  /// error details) so the UI can display it to the user.
   Future<bool> testConnection(ProviderConfig config, String apiKey) async {
     final AiProvider provider = createProvider(config, apiKey);
     try {
       return await provider.testConnection();
-    } catch (_) {
-      return false;
     } finally {
       // Release the HTTP client if the implementation supports it.
       if (provider is OpenAiCompatibleProvider) {
