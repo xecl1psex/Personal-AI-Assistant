@@ -282,7 +282,7 @@ class _ChatsDrawer extends StatelessWidget {
                       return ListTile(
                         selected: isActive,
                         selectedTileColor:
-                            theme.colorScheme.primary.withValues(alpha: 0.12),
+                            theme.colorScheme.primary.withOpacity(0.12),
                         iconColor:
                             isActive ? theme.colorScheme.primary : null,
                         leading: Icon(
