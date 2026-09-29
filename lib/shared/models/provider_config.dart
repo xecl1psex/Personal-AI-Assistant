@@ -28,7 +28,7 @@ class ProviderConfig {
   /// OpenAI-compatible base URL, e.g. 'https://api.openai.com/v1'.
   final String baseUrl;
 
-  /// Model name sent in chat requests, e.g. 'gpt-4o'.
+  /// Model name sent in chat requests, e.g. 'gpt-6-astra'.
   final String modelName;
 
   /// Whether the model accepts image input.
