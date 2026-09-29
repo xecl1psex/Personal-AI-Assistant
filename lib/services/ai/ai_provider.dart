@@ -6,43 +6,30 @@ import '../../shared/models/chat_message.dart';
 /// Concrete implementations live in this folder
 /// (e.g. `OpenAiCompatibleProvider` in openai_compatible.dart).
 abstract class AiProvider {
-  /// Human-readable provider name, e.g. 'OpenAI'.
-  String get name;
-
-  /// Whether the provider is configured (API key present, endpoint set).
-  Future<bool> isConfigured();
-
   /// Sends a chat completion request.
   ///
   /// [messages] is the conversation history (chronological order).
-  /// Returns assistant text answer. Throws [AiException] on failure.
+  /// Returns assistant text answer. Throws [AiProviderException] on failure.
   Future<String> chat(
     List<ChatMessage> messages, {
     String? systemPrompt,
-    String? model,
-    double temperature = 0.7,
   });
 
-  /// Parses natural language into structured intents
-  /// (e.g. transaction / task creation) using the LLM.
-  ///
-  /// Returns raw JSON as a [Map], or null if parsing failed.
-  Future<Map<String, Object?>?> parseIntent(
-    String input, {
-    required List<String> allowedIntents,
-  });
-
-  /// Releases resources (HTTP clients, subscriptions).
-  void dispose();
+  /// Lightweight connectivity check (tiny completion request).
+  /// Returns true if the endpoint + API key work, false otherwise.
+  Future<bool> testConnection();
 }
 
 /// Error thrown by AI providers.
-class AiException implements Exception {
-  const AiException(this.message, {this.statusCode});
+class AiProviderException implements Exception {
+  const AiProviderException(this.message, {this.statusCode});
 
   final String message;
   final int? statusCode;
 
   @override
-  String toString() => 'AiException(${statusCode ?? '-'}): $message';
+  String toString() => 'AiProviderException(${statusCode ?? '-'}): $message';
 }
+
+/// Backwards-compatible alias: older code may still refer to [AiException].
+typedef AiException = AiProviderException;

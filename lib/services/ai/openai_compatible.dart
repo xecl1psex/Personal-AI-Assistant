@@ -6,116 +6,115 @@ import '../../shared/models/chat_message.dart';
 import 'ai_provider.dart';
 
 /// AI provider for any OpenAI-compatible `/v1/chat/completions` endpoint:
-/// OpenAI, OpenRouter, Together, LM Studio, Ollama (openai mode), etc.
+/// OpenAI, Gemini (OpenAI-compat mode), DeepSeek, Groq, OpenRouter,
+/// Ollama (openai mode), etc.
 class OpenAiCompatibleProvider implements AiProvider {
   OpenAiCompatibleProvider({
     required this.baseUrl,
+    required this.modelName,
     required this.apiKey,
-    this.defaultModel = 'gpt-4o-mini',
     http.Client? client,
   }) : _client = client ?? http.Client();
-
-  @override
-  final String name = 'OpenAI-compatible';
 
   /// API base URL, e.g. 'https://api.openai.com/v1'.
   final String baseUrl;
 
+  /// Model name sent in requests, e.g. 'gpt-4o'.
+  final String modelName;
+
   /// Bearer token / API key.
   final String apiKey;
 
-  /// Model used when none is passed to [chat].
-  final String defaultModel;
-
   final http.Client _client;
-
-  @override
-  Future<bool> isConfigured() async {
-    // TODO: реализация — проверить валидность ключа лёгким запросом
-    // (например, GET {baseUrl}/models).
-    return apiKey.isNotEmpty && baseUrl.isNotEmpty;
-  }
 
   @override
   Future<String> chat(
     List<ChatMessage> messages, {
     String? systemPrompt,
-    String? model,
-    double temperature = 0.7,
   }) async {
     final List<Map<String, String>> payload = <Map<String, String>>[
       if (systemPrompt != null && systemPrompt.isNotEmpty)
-        <String, String>{'role': ChatMessage.roleSystem, 'content': systemPrompt},
+        <String, String>{
+          'role': ChatMessage.roleSystem,
+          'content': systemPrompt,
+        },
       ...messages.map((ChatMessage m) => <String, String>{
             'role': m.role,
             'content': m.content,
           }),
     ];
 
-    // TODO: реализация — отправить POST {baseUrl}/chat/completions
-    // с телом {"model": ..., "messages": payload, "temperature": ...}
-    // и достать choices[0].message.content из ответа.
     final Uri uri = Uri.parse('$baseUrl/chat/completions');
-    final http.Response response = await _client.post(
-      uri,
-      headers: <String, String>{
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $apiKey',
-      },
-      body: jsonEncode(<String, Object?>{
-        'model': model ?? defaultModel,
-        'messages': payload,
-        'temperature': temperature,
-      }),
-    );
+    late final http.Response response;
+    try {
+      response = await _client.post(
+        uri,
+        headers: <String, String>{
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $apiKey',
+        },
+        body: jsonEncode(<String, Object?>{
+          'model': modelName,
+          'messages': payload,
+          'stream': false,
+        }),
+      );
+    } on http.ClientException catch (e) {
+      throw AiProviderException('Сетевая ошибка: ${e.message}');
+    }
 
     if (response.statusCode != 200) {
-      throw AiException(
-        'Ошибка API (${response.statusCode})',
+      throw AiProviderException(
+        'Ошибка API (${response.statusCode}): ${response.body}',
         statusCode: response.statusCode,
       );
     }
 
-    final Map<String, Object?> data =
-        jsonDecode(response.body) as Map<String, Object?>;
-    final List<Object?> choices = data['choices'] as List<Object?>? ?? [];
+    final Map<String, dynamic> data =
+        jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+    final List<dynamic> choices =
+        (data['choices'] as List<dynamic>?) ?? <dynamic>[];
     if (choices.isEmpty) {
-      throw const AiException('Пустой ответ модели');
+      throw const AiProviderException('Пустой ответ модели');
     }
-    final Map<String, Object?> message =
-        (choices.first as Map<String, Object?>)['message']
-            as Map<String, Object?>? ??
-        <String, Object?>{};
+    final Map<String, dynamic> message =
+        (choices.first as Map<String, dynamic>)['message']
+            as Map<String, dynamic>? ??
+        <String, dynamic>{};
     return (message['content'] as String?) ?? '';
   }
 
   @override
-  Future<Map<String, Object?>?> parseIntent(
-    String input, {
-    required List<String> allowedIntents,
-  }) async {
-    // TODO: реализация — попросить модель вернуть строгий JSON вида
-    // {"intent": "...", "data": {...}} и распарсить его через jsonDecode.
+  Future<bool> testConnection() async {
+    final Uri uri = Uri.parse('$baseUrl/chat/completions');
     try {
-      final String raw = await chat(
-        <ChatMessage>[
-          ChatMessage(
-            role: ChatMessage.roleUser,
-            content: input,
-            createdAt: DateTime.now(),
-          ),
-        ],
-        systemPrompt:
-            'Верни строго JSON. Разрешённые intent: ${allowedIntents.join(", ")}.',
-        temperature: 0.0,
-      );
-      return jsonDecode(raw) as Map<String, Object?>?;
+      final http.Response response = await _client
+          .post(
+            uri,
+            headers: <String, String>{
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $apiKey',
+            },
+            body: jsonEncode(<String, Object?>{
+              'model': modelName,
+              'messages': <Map<String, String>>[
+                <String, String>{
+                  'role': ChatMessage.roleUser,
+                  'content': 'ping',
+                },
+              ],
+              'max_tokens': 5,
+              'stream': false,
+            }),
+          )
+          .timeout(const Duration(seconds: 15));
+      return response.statusCode == 200;
     } catch (_) {
-      return null;
+      return false;
     }
   }
 
-  @override
+  /// Releases the underlying HTTP client.
   void dispose() {
     _client.close();
   }
