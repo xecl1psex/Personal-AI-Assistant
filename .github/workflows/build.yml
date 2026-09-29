@@ -27,18 +27,69 @@ jobs:
       - name: Create Android platform files
         run: flutter create --platforms=android --project-name personal_ai --org com.xecl1psex .
 
-      - name: Patch Kotlin version to 1.9.24
+      - name: Patch Kotlin version
         run: |
           sed -i 's|id "org.jetbrains.kotlin.android" version "[^"]*"|id "org.jetbrains.kotlin.android" version "1.9.24"|' android/settings.gradle
 
-      - name: Add INTERNET permission to AndroidManifest
+      - name: Add INTERNET permission
         run: |
           MANIFEST=android/app/src/main/AndroidManifest.xml
           if ! grep -q 'android.permission.INTERNET' "$MANIFEST"; then
             sed -i 's|<manifest xmlns:android="http://schemas.android.com/apk/res/android">|<manifest xmlns:android="http://schemas.android.com/apk/res/android">\n    <uses-permission android:name="android.permission.INTERNET"/>|' "$MANIFEST"
           fi
-          echo "=== AndroidManifest.xml ==="
-          cat "$MANIFEST"
+
+      - name: Decode keystore
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > android/app/personal_ai.jks
+
+      - name: Create key.properties
+        run: |
+          cat > android/key.properties <<EOF
+          storePassword=${{ secrets.KEYSTORE_PASSWORD }}
+          keyPassword=${{ secrets.KEY_PASSWORD }}
+          keyAlias=${{ secrets.KEY_ALIAS }}
+          storeFile=personal_ai.jks
+          EOF
+
+      - name: Patch build.gradle for signing
+        run: |
+          python3 <<'PYEOF'
+          path = 'android/app/build.gradle'
+          with open(path, 'r') as f:
+              content = f.read()
+          
+          if 'keystoreProperties' not in content:
+              props_block = """
+          def keystoreProperties = new Properties()
+          def keystorePropertiesFile = rootProject.file('key.properties')
+          if (keystorePropertiesFile.exists()) {
+              keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+          }
+          """
+              content = props_block + content
+          
+          signing_block = """
+              signingConfigs {
+                  release {
+                      keyAlias keystoreProperties['keyAlias']
+                      keyPassword keystoreProperties['keyPassword']
+                      storeFile file(keystoreProperties['storeFile'])
+                      storePassword keystoreProperties['storePassword']
+                  }
+              }
+          """
+          
+          if 'signingConfigs' not in content:
+              content = content.replace('android {', 'android {\n' + signing_block, 1)
+          
+          if 'signingConfig signingConfigs.release' not in content:
+              content = content.replace('buildTypes {\n        release {', 'buildTypes {\n        release {\n            signingConfig signingConfigs.release', 1)
+          
+          with open(path, 'w') as f:
+              f.write(content)
+          PYEOF
+          echo "=== Patched build.gradle ==="
+          cat android/app/build.gradle | head -60
 
       - name: Install dependencies
         run: flutter pub get
