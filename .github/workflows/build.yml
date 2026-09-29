@@ -27,6 +27,14 @@ jobs:
       - name: Create Android platform files
         run: flutter create --platforms=android --project-name personal_ai --org com.xecl1psex .
 
+      - name: Patch Kotlin version to 1.9.24
+        run: |
+          sed -i 's|id "org.jetbrains.kotlin.android" version "[^"]*"|id "org.jetbrains.kotlin.android" version "1.9.24"|' android/settings.gradle
+          echo "=== settings.gradle ==="
+          cat android/settings.gradle
+          echo "=== build.gradle ==="
+          cat android/build.gradle
+
       - name: Install dependencies
         run: flutter pub get
 
