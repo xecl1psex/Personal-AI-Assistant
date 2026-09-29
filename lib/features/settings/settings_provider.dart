@@ -68,8 +68,7 @@ class SettingsProvider extends ChangeNotifier {
       _activeProviderId = prefs.getString(prefsKeyActiveProviderId);
       // Validate the stored active id still exists.
       if (_activeProviderId != null && activeProvider == null) {
-        _activeProviderId =
-            _providers.isNotEmpty ? _providers.first.id : null;
+        _activeProviderId = _providers.isNotEmpty ? _providers.first.id : null;
       }
     } catch (e, s) {
       debugPrint('SettingsProvider.load failed: $e\n$s');
@@ -123,8 +122,7 @@ class SettingsProvider extends ChangeNotifier {
         .where((ProviderConfig p) => p.id != id)
         .toList(growable: false);
     if (_activeProviderId == id) {
-      _activeProviderId =
-          _providers.isNotEmpty ? _providers.first.id : null;
+      _activeProviderId = _providers.isNotEmpty ? _providers.first.id : null;
     }
     await _storage.deleteApiKey(id);
     await _saveProviders();

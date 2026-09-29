@@ -166,7 +166,9 @@ class _AddProviderDialogState extends State<AddProviderDialog> {
         displayName: _nameController.text.trim().isEmpty
             ? widget.existing!.displayName
             : _nameController.text.trim(),
-        baseUrl: _trimmedBaseUrl.isEmpty ? widget.existing!.baseUrl : _trimmedBaseUrl,
+        baseUrl: _trimmedBaseUrl.isEmpty
+            ? widget.existing!.baseUrl
+            : _trimmedBaseUrl,
         modelName: _modelController.text.trim().isEmpty
             ? widget.existing!.modelName
             : _modelController.text.trim(),
@@ -526,8 +528,7 @@ class _AddProviderDialogState extends State<AddProviderDialog> {
         return Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Icon(Icons.error_outline,
-                size: 16, color: theme.colorScheme.error),
+            Icon(Icons.error_outline, size: 16, color: theme.colorScheme.error),
             const SizedBox(width: 4),
             Expanded(
               child: Text(
