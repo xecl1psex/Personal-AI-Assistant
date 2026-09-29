@@ -434,9 +434,7 @@ class _AddProviderDialogState extends State<AddProviderDialog> {
           autocorrect: false,
           enableSuggestions: false,
           decoration: InputDecoration(
-            labelText: _isLocal
-                ? 'API-ключ (не обязателен)'
-                : (_isEdit ? 'API-ключ' : 'API-ключ'),
+            labelText: _isLocal ? 'API-ключ (не обязателен)' : 'API-ключ',
             hintText: _isEdit ? 'Не меняйте, если ключ тот же' : null,
             helperText: _isEdit
                 ? 'Ключ загружен из защищённого хранилища. '
