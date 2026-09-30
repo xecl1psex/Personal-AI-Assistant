@@ -41,6 +41,7 @@ jobs:
       - name: Decode keystore
         run: |
           echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > android/app/personal_ai.jks
+          ls -la android/app/personal_ai.jks
 
       - name: Create key.properties
         run: |
@@ -57,7 +58,7 @@ jobs:
           path = 'android/app/build.gradle'
           with open(path, 'r') as f:
               content = f.read()
-          
+
           if 'keystoreProperties' not in content:
               props_block = """
           def keystoreProperties = new Properties()
@@ -67,7 +68,7 @@ jobs:
           }
           """
               content = props_block + content
-          
+
           signing_block = """
               signingConfigs {
                   release {
@@ -78,18 +79,23 @@ jobs:
                   }
               }
           """
-          
+
           if 'signingConfigs' not in content:
               content = content.replace('android {', 'android {\n' + signing_block, 1)
-          
+
           if 'signingConfig signingConfigs.release' not in content:
               content = content.replace('buildTypes {\n        release {', 'buildTypes {\n        release {\n            signingConfig signingConfigs.release', 1)
-          
+
           with open(path, 'w') as f:
               f.write(content)
+
+          print("=== build.gradle (first 60 lines) ===")
+          with open(path) as f:
+              for i, line in enumerate(f):
+                  if i >= 60:
+                      break
+                  print(line, end='')
           PYEOF
-          echo "=== Patched build.gradle ==="
-          cat android/app/build.gradle | head -60
 
       - name: Install dependencies
         run: flutter pub get
