@@ -59,7 +59,7 @@ jobs:
           with open(path, 'r') as f:
               content = f.read()
 
-          # Insert keystoreProperties BEFORE android {} block (after plugins {} block)
+          # 1. Add keystoreProperties before android {
           if 'keystoreProperties' not in content:
               props_block = """def keystoreProperties = new Properties()
           def keystorePropertiesFile = rootProject.file('key.properties')
@@ -70,8 +70,9 @@ jobs:
           """
               content = content.replace('android {', props_block + 'android {', 1)
 
-          # Insert signingConfigs right after android { opening
-          signing_block = """    signingConfigs {
+          # 2. Add signingConfigs.release inside android {
+          if "signingConfigs {" not in content:
+              signing_block = """    signingConfigs {
                   release {
                       keyAlias keystoreProperties['keyAlias']
                       keyPassword keystoreProperties['keyPassword']
@@ -81,22 +82,17 @@ jobs:
               }
 
           """
-
-          if "signingConfigs {" not in content:
               content = content.replace('android {', 'android {\n' + signing_block, 1)
 
-          # Replace debug signing with release
+          # 3. Replace debug signing with release (BOTH variants: with and without =)
+          content = content.replace('signingConfig = signingConfigs.debug', 'signingConfig = signingConfigs.release')
           content = content.replace('signingConfig signingConfigs.debug', 'signingConfig signingConfigs.release')
 
           with open(path, 'w') as f:
               f.write(content)
 
-          print("=== build.gradle (first 70 lines) ===")
-          with open(path) as f:
-              for i, line in enumerate(f):
-                  if i >= 70:
-                      break
-                  print(line, end='')
+          print("=== build.gradle ===")
+          print(content)
           PYEOF
           
       - name: Install dependencies
