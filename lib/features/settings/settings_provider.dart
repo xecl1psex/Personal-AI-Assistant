@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../services/ai/ai_service.dart';
+import '../../services/ai/provider_families.dart';
 import '../../services/storage/secure_storage.dart';
 import '../../shared/models/provider_config.dart';
 
@@ -56,6 +57,28 @@ class SettingsProvider extends ChangeNotifier {
   bool get loaded => _loaded;
 
   // ---------------------------------------------------------------------------
+  // Families
+  // ---------------------------------------------------------------------------
+
+  /// The [ProviderFamily] a config belongs to (null for unknown/legacy ids).
+  ProviderFamily? getFamily(ProviderConfig config) {
+    final String id =
+        config.familyId.isNotEmpty ? config.familyId : config.presetId;
+    return ProviderFamilies.findById(id);
+  }
+
+  /// Change only the model of an existing provider (family/key stay intact).
+  Future<void> updateModel(String providerId, String newModelName) async {
+    final int index =
+        _providers.indexWhere((ProviderConfig p) => p.id == providerId);
+    if (index == -1) return;
+    _providers = List<ProviderConfig>.from(_providers)
+      ..[index] = _providers[index].copyWith(modelName: newModelName);
+    await _saveProviders();
+    notifyListeners();
+  }
+
+  // ---------------------------------------------------------------------------
   // Persistence
   // ---------------------------------------------------------------------------
 
@@ -104,13 +127,21 @@ class SettingsProvider extends ChangeNotifier {
   /// persisted, and both writes are fully awaited — so a saved provider can
   /// never exist in SharedPreferences without its key being committed.
   Future<void> addProvider(ProviderConfig config, String apiKey) async {
+    // 0. Normalize: familyId is the canonical link; keep presetId in sync
+    //    for backwards compatibility with the old ModelPreset catalog.
+    final ProviderConfig normalized = config.familyId.isEmpty
+        ? config.copyWith(familyId: config.presetId)
+        : (config.presetId.isEmpty
+            ? config.copyWith(presetId: config.familyId)
+            : config);
+
     // 1. Save the key first (awaited — guarantees the write completed).
-    await _storage.saveApiKey(config.id, apiKey);
+    await _storage.saveApiKey(normalized.id, apiKey);
 
     // 2. Only then update the in-memory list and persist it.
-    _providers = List<ProviderConfig>.from(_providers)..add(config);
+    _providers = List<ProviderConfig>.from(_providers)..add(normalized);
     if (_activeProviderId == null) {
-      _activeProviderId = config.id;
+      _activeProviderId = normalized.id;
     }
     await _saveProviders();
     notifyListeners();
@@ -143,12 +174,19 @@ class SettingsProvider extends ChangeNotifier {
         _providers.indexWhere((ProviderConfig p) => p.id == config.id);
     if (index == -1) return; // unknown id — ignore
 
+    // Keep familyId/presetId in sync on updates too.
+    final ProviderConfig normalized = config.familyId.isEmpty
+        ? config.copyWith(familyId: config.presetId)
+        : (config.presetId.isEmpty
+            ? config.copyWith(presetId: config.familyId)
+            : config);
+
     // Save the new key BEFORE persisting the list (fully awaited).
     if (newApiKey != null && newApiKey.isNotEmpty) {
-      await _storage.saveApiKey(config.id, newApiKey);
+      await _storage.saveApiKey(normalized.id, newApiKey);
     }
 
-    _providers = List<ProviderConfig>.from(_providers)..[index] = config;
+    _providers = List<ProviderConfig>.from(_providers)..[index] = normalized;
     await _saveProviders();
     notifyListeners();
   }

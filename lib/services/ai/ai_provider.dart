@@ -22,10 +22,20 @@ abstract class AiProvider {
 
 /// Error thrown by AI providers.
 class AiProviderException implements Exception {
-  const AiProviderException(this.message, {this.statusCode});
+  const AiProviderException(
+    this.message, {
+    this.statusCode,
+    this.errorDetails,
+  });
 
+  /// Human-readable error text (Russian) shown to the user.
   final String message;
+
+  /// HTTP status code, when the failure came from an API response.
   final int? statusCode;
+
+  /// Raw server response body / original error text for debugging.
+  final String? errorDetails;
 
   @override
   String toString() => 'AiProviderException(${statusCode ?? '-'}): $message';
