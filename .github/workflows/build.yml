@@ -59,18 +59,19 @@ jobs:
           with open(path, 'r') as f:
               content = f.read()
 
+          # Insert keystoreProperties BEFORE android {} block (after plugins {} block)
           if 'keystoreProperties' not in content:
-              props_block = """
-          def keystoreProperties = new Properties()
+              props_block = """def keystoreProperties = new Properties()
           def keystorePropertiesFile = rootProject.file('key.properties')
           if (keystorePropertiesFile.exists()) {
               keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
           }
-          """
-              content = props_block + content
 
-          signing_block = """
-              signingConfigs {
+          """
+              content = content.replace('android {', props_block + 'android {', 1)
+
+          # Insert signingConfigs right after android { opening
+          signing_block = """    signingConfigs {
                   release {
                       keyAlias keystoreProperties['keyAlias']
                       keyPassword keystoreProperties['keyPassword']
@@ -78,25 +79,26 @@ jobs:
                       storePassword keystoreProperties['storePassword']
                   }
               }
+
           """
 
-          if 'signingConfigs' not in content:
+          if "signingConfigs {" not in content:
               content = content.replace('android {', 'android {\n' + signing_block, 1)
 
-          if 'signingConfig signingConfigs.release' not in content:
-              content = content.replace('buildTypes {\n        release {', 'buildTypes {\n        release {\n            signingConfig signingConfigs.release', 1)
+          # Replace debug signing with release
+          content = content.replace('signingConfig signingConfigs.debug', 'signingConfig signingConfigs.release')
 
           with open(path, 'w') as f:
               f.write(content)
 
-          print("=== build.gradle (first 60 lines) ===")
+          print("=== build.gradle (first 70 lines) ===")
           with open(path) as f:
               for i, line in enumerate(f):
-                  if i >= 60:
+                  if i >= 70:
                       break
                   print(line, end='')
           PYEOF
-
+          
       - name: Install dependencies
         run: flutter pub get
 
