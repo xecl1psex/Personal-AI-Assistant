@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/theme/theme_provider.dart';
+import '../../services/ai/provider_families.dart';
 import '../../shared/models/provider_config.dart';
 import '../../shared/widgets/accent_color_picker.dart';
 import 'settings_provider.dart';
@@ -133,7 +134,8 @@ class _AiProvidersSection extends StatelessWidget {
     await AddProviderDialog.show(context);
   }
 
-  /// Bottom sheet with actions for one provider: activate / edit / delete.
+  /// Bottom sheet with actions for one provider: activate / switch model /
+  /// edit / delete.
   void _showProviderActions(
     BuildContext context,
     SettingsProvider settings,
@@ -141,6 +143,10 @@ class _AiProvidersSection extends StatelessWidget {
   ) {
     final bool isActive = config.id == settings.activeProviderId;
     final ThemeData theme = Theme.of(context);
+    // Family models (resolved via familyId, legacy fallback to presetId).
+    final String familyId =
+        config.familyId.isNotEmpty ? config.familyId : config.presetId;
+    final ProviderFamily? family = ProviderFamilies.findById(familyId);
 
     showModalBottomSheet<void>(
       context: context,
@@ -171,6 +177,16 @@ class _AiProvidersSection extends StatelessWidget {
                   settings.setActiveProvider(config.id);
                 },
               ),
+              if (family != null && family.models.length > 1)
+                ListTile(
+                  leading: const Icon(Icons.swap_horiz),
+                  title: const Text('Сменить модель'),
+                  subtitle: Text(family.name),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    _showModelPicker(context, settings, config, family);
+                  },
+                ),
               ListTile(
                 leading: const Icon(Icons.edit_outlined),
                 title: const Text('Редактировать'),
@@ -180,7 +196,8 @@ class _AiProvidersSection extends StatelessWidget {
                 },
               ),
               ListTile(
-                leading: Icon(Icons.delete_outline, color: theme.colorScheme.error),
+                leading: Icon(Icons.delete_outline,
+                    color: theme.colorScheme.error),
                 title: Text(
                   'Удалить',
                   style: theme.textTheme.bodyLarge
@@ -191,6 +208,89 @@ class _AiProvidersSection extends StatelessWidget {
                   _confirmDelete(context, config);
                 },
               ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  /// Model switcher inside the provider's family — changes only modelName.
+  void _showModelPicker(
+    BuildContext context,
+    SettingsProvider settings,
+    ProviderConfig config,
+    ProviderFamily family,
+  ) {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (BuildContext sheetContext) {
+        final ThemeData theme = Theme.of(sheetContext);
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: Text(
+                  '${family.icon} ${family.name} — выбор модели',
+                  style: theme.textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.bold),
+                ),
+              ),
+              Flexible(
+                child: ListView(
+                  shrinkWrap: true,
+                  children: <Widget>[
+                    for (final ModelOption model in family.models)
+                      RadioListTile<String>(
+                        value: model.id,
+                        groupValue: config.modelName,
+                        onChanged: (String? value) {
+                          Navigator.of(sheetContext).pop();
+                          if (value != null) {
+                            settings.updateModel(config.id, value);
+                          }
+                        },
+                        title: Row(
+                          children: <Widget>[
+                            Flexible(child: Text(model.name)),
+                            if (model.recommended) ...<Widget>[
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: theme.colorScheme.primary
+                                      .withOpacity(0.15),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  'рекомендуем',
+                                  style: theme.textTheme.labelSmall?.copyWith(
+                                    color: theme.colorScheme.primary,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                        subtitle: model.description == null
+                            ? null
+                            : Text(
+                                model.description!,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
             ],
           ),
         );

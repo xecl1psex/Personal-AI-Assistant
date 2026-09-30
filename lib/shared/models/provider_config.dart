@@ -12,6 +12,7 @@ class ProviderConfig {
     required this.displayName,
     required this.baseUrl,
     required this.modelName,
+    this.familyId = '',
     this.supportsVision = false,
     this.supportsFunctions = false,
   });
@@ -20,7 +21,12 @@ class ProviderConfig {
   final String id;
 
   /// Id of the [ModelPreset] this config was created from ('gemini', ...).
+  /// Kept for backwards compatibility; new configs use [familyId].
   final String presetId;
+
+  /// Id of the [ProviderFamily] this config belongs to ('gemini', 'openai',
+  /// ...). Empty string for legacy configs added before the families refactor.
+  final String familyId;
 
   /// User-visible name of the provider entry.
   final String displayName;
@@ -40,6 +46,7 @@ class ProviderConfig {
   ProviderConfig copyWith({
     String? id,
     String? presetId,
+    String? familyId,
     String? displayName,
     String? baseUrl,
     String? modelName,
@@ -49,6 +56,7 @@ class ProviderConfig {
     return ProviderConfig(
       id: id ?? this.id,
       presetId: presetId ?? this.presetId,
+      familyId: familyId ?? this.familyId,
       displayName: displayName ?? this.displayName,
       baseUrl: baseUrl ?? this.baseUrl,
       modelName: modelName ?? this.modelName,
@@ -65,6 +73,7 @@ class ProviderConfig {
     return <String, dynamic>{
       'id': id,
       'preset_id': presetId,
+      'family_id': familyId,
       'display_name': displayName,
       'base_url': baseUrl,
       'model_name': modelName,
@@ -76,9 +85,12 @@ class ProviderConfig {
   factory ProviderConfig.fromMap(Map<String, dynamic> map) {
     final Object? vision = map['supports_vision'];
     final Object? functions = map['supports_functions'];
+    final String preset =
+        (map['preset_id'] ?? map['presetId']) as String? ?? '';
     return ProviderConfig(
       id: map['id'] as String,
-      presetId: (map['preset_id'] ?? map['presetId']) as String? ?? '',
+      presetId: preset,
+      familyId: (map['family_id'] ?? map['familyId']) as String? ?? preset,
       displayName: map['display_name'] as String? ?? '',
       baseUrl: map['base_url'] as String? ?? '',
       modelName: map['model_name'] as String? ?? '',
@@ -90,6 +102,7 @@ class ProviderConfig {
   Map<String, dynamic> toJson() => <String, dynamic>{
         'id': id,
         'presetId': presetId,
+        'familyId': familyId,
         'displayName': displayName,
         'baseUrl': baseUrl,
         'modelName': modelName,
@@ -98,9 +111,13 @@ class ProviderConfig {
       };
 
   factory ProviderConfig.fromJson(Map<String, dynamic> json) {
+    final String preset =
+        (json['presetId'] ?? json['preset_id']) as String? ?? '';
     return ProviderConfig(
       id: json['id'] as String,
-      presetId: (json['presetId'] ?? json['preset_id']) as String? ?? '',
+      presetId: preset,
+      // Legacy configs without familyId fall back to presetId (ids coincide).
+      familyId: (json['familyId'] ?? json['family_id']) as String? ?? preset,
       displayName: json['displayName'] as String? ?? '',
       baseUrl: json['baseUrl'] as String? ?? '',
       modelName: json['modelName'] as String? ?? '',

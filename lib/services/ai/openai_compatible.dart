@@ -29,6 +29,38 @@ class OpenAiCompatibleProvider implements AiProvider {
 
   final http.Client _client;
 
+  /// Map an HTTP status code to a clear Russian error message.
+  static String friendlyHttpMessage(int statusCode) {
+    switch (statusCode) {
+      case 401:
+        return 'Неверный API-ключ. Проверьте его в настройках.';
+      case 403:
+        return 'Доступ запрещён. Возможно, нужен VPN или ключ не подходит.';
+      case 404:
+        return 'Модель не найдена. Проверьте название модели.';
+      case 429:
+        return 'Слишком много запросов. Подождите минуту и попробуйте снова.';
+      case 500:
+      case 502:
+      case 503:
+        return 'Сервер перегружен. Попробуйте через пару минут.';
+      default:
+        return 'Ошибка API ($statusCode).';
+    }
+  }
+
+  /// Build an [AiProviderException] for a failed HTTP response:
+  /// user-friendly Russian text + raw server body in [errorDetails].
+  static AiProviderException _httpException(http.Response response) {
+    final String details = _truncate(response.body);
+    return AiProviderException(
+      '${friendlyHttpMessage(response.statusCode)} '
+      '(HTTP ${response.statusCode})',
+      statusCode: response.statusCode,
+      errorDetails: details.isEmpty ? null : details,
+    );
+  }
+
   @override
   Future<String> chat(
     List<ChatMessage> messages, {
@@ -65,17 +97,22 @@ class OpenAiCompatibleProvider implements AiProvider {
         ).timeout(const Duration(seconds: 60));
       } on TimeoutException {
         throw const AiProviderException(
-          'TimeoutException: сервер не ответил за 60 секунд. '
-          'Проверьте URL и доступность сети.',
+          'Сервер не ответил за 60 секунд. Проверьте интернет.',
+          errorDetails: 'TimeoutException',
         );
       } on SocketException catch (e) {
+        final String osError = e.osError?.message ?? e.message;
         throw AiProviderException(
-          'SocketException: ${e.osError?.message ?? e.message}. '
-          'Устройство не может подключиться к $baseUrl '
-          '(на Android localhost эмулятора недоступен — используйте 10.0.2.2).',
+          'Нет интернета. Проверьте подключение. ($baseUrl)',
+          errorDetails:
+              'SocketException: $osError. На Android-эмуляторе localhost '
+              'недоступен — используйте 10.0.2.2.',
         );
       } on http.ClientException catch (e) {
-        throw AiProviderException('Сетевая ошибка (ClientException): ${e.message}');
+        throw AiProviderException(
+          'Сетевая ошибка: ${e.message}',
+          errorDetails: 'ClientException: ${e.message}',
+        );
       }
 
       // Retry on HTTP 503 (rate limited / temporarily unavailable): up to 3
@@ -88,10 +125,7 @@ class OpenAiCompatibleProvider implements AiProvider {
     }
 
     if (response.statusCode != 200) {
-      throw AiProviderException(
-        'Ошибка API (${response.statusCode}): ${_truncate(response.body)}',
-        statusCode: response.statusCode,
-      );
+      throw _httpException(response);
     }
 
     final Map<String, dynamic> data =
@@ -142,24 +176,26 @@ class OpenAiCompatibleProvider implements AiProvider {
           .timeout(const Duration(seconds: 60));
     } on TimeoutException {
       throw const AiProviderException(
-        'TimeoutException: сервер не ответил за 60 секунд. '
-        'Проверьте URL и доступность сети.',
+        'Сервер не ответил за 60 секунд. Проверьте интернет.',
+        errorDetails: 'TimeoutException',
       );
     } on SocketException catch (e) {
+      final String osError = e.osError?.message ?? e.message;
       throw AiProviderException(
-        'SocketException: ${e.osError?.message ?? e.message}. '
-        'Устройство не может подключиться к $baseUrl '
-        '(на Android localhost эмулятора недоступен — используйте 10.0.2.2).',
+        'Нет интернета. Проверьте подключение. ($baseUrl)',
+        errorDetails:
+            'SocketException: $osError. На Android-эмуляторе localhost '
+            'недоступен — используйте 10.0.2.2.',
       );
     } on http.ClientException catch (e) {
-      throw AiProviderException('Сетевая ошибка (ClientException): ${e.message}');
+      throw AiProviderException(
+        'Сетевая ошибка: ${e.message}',
+        errorDetails: 'ClientException: ${e.message}',
+      );
     }
 
     if (response.statusCode != 200) {
-      throw AiProviderException(
-        'HTTP ${response.statusCode}: ${_truncate(response.body)}',
-        statusCode: response.statusCode,
-      );
+      throw _httpException(response);
     }
     return true;
   }

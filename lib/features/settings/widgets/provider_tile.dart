@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 
-import '../../../services/ai/model_presets.dart';
+import '../../../services/ai/provider_families.dart';
 import '../../../shared/models/provider_config.dart';
 
 /// A single AI provider row inside the Settings list.
 ///
-/// Shows a preset emoji/icon, bold [ProviderConfig.displayName], small gray
+/// Shows the family icon (resolved via [ProviderFamilies.findById] from
+/// [ProviderConfig.familyId]), bold [ProviderConfig.displayName], small gray
 /// [ProviderConfig.modelName] and a check-mark when this provider is active.
 class ProviderTile extends StatelessWidget {
   const ProviderTile({
@@ -21,39 +22,24 @@ class ProviderTile extends StatelessWidget {
   /// Whether this is the currently active provider (check-mark + tint).
   final bool isActive;
 
-  /// Tap callback — usually switches the active provider.
+  /// Tap callback — usually opens the provider actions bottom sheet.
   final VoidCallback? onTap;
 
   /// Long-press callback — usually opens the delete confirmation.
   final VoidCallback? onLongPress;
 
-  /// Emoji badge for each known preset (fallback: robot face).
-  static String presetEmoji(String presetId) {
-    switch (presetId) {
-      case 'gemini':
-        return '✨';
-      case 'openai':
-        return '🧠';
-      case 'claude':
-        return '🟠';
-      case 'deepseek':
-        return '🐋';
-      case 'groq':
-        return '⚡';
-      case 'openrouter':
-        return '🌐';
-      case 'ollama':
-        return '🦙';
-      default:
-        return '🤖';
-    }
+  /// Resolve the family for a config (falls back to legacy presetId).
+  static ProviderFamily? familyOf(ProviderConfig config) {
+    final String id =
+        config.familyId.isNotEmpty ? config.familyId : config.presetId;
+    return ProviderFamilies.findById(id);
   }
 
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
-    final ModelPreset? preset = ModelPresets.findById(config.presetId);
-    final bool needsKey = preset == null || preset.needsApiKey;
+    final ProviderFamily? family = familyOf(config);
+    final bool requiresKey = family?.requiresApiKey ?? true;
 
     return ListTile(
       onTap: onTap,
@@ -65,7 +51,7 @@ class ProviderTile extends StatelessWidget {
             : theme.colorScheme.surfaceContainerHighest,
         radius: 22,
         child: Text(
-          presetEmoji(config.presetId),
+          family?.icon ?? '🤖',
           style: const TextStyle(fontSize: 20),
         ),
       ),
@@ -79,7 +65,7 @@ class ProviderTile extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
           ),
-          if (!needsKey) ...<Widget>[
+          if (!requiresKey) ...<Widget>[
             const SizedBox(width: 6),
             Tooltip(
               message: 'Локальный провайдер',
@@ -106,7 +92,7 @@ class ProviderTile extends StatelessWidget {
               color: theme.colorScheme.onSurfaceVariant.withAlpha(90),
             ),
       selected: isActive,
-      selectedTileColor: theme.colorScheme.primary.withAlpha(15),
+      selectedTileColor: theme.colorScheme.primary.withOpacity(0.06),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(14),
       ),
